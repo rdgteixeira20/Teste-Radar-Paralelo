@@ -1,0 +1,26 @@
+int incomingByte = 0; 
+
+void setup() {
+  Serial.begin(4800,SERIAL_6E1); 
+}
+void loop() {
+
+  if (Serial.available() > 0) {
+    
+    incomingByte = Serial.read();
+
+    // responde com o dado recebido:
+   if (incomingByte != 0) 
+    Serial.print("Distância decimal ");
+    Serial.println(incomingByte/2.5, DEC);
+    Serial.println("*");
+    Serial.println("*");
+    Serial.println("*");
+    Serial.println("*");
+    
+                                                                                                           
+  
+    delay(100);
+  
+  }
+}
