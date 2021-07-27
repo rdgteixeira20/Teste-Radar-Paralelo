@@ -1,0 +1,123 @@
+import sys
+import serial
+
+
+from PyQt5.QtWidgets import QMainWindow, QApplication
+from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.uic import loadUi
+
+
+ser = serial.Serial('/dev/tty.usbmodem14201', 9600, timeout=1)
+
+class TestThread(QThread):
+    serialUpdate = pyqtSignal(str)
+    def run(self):
+        while ser.is_open:
+            QThread.sleep(1)
+            value = ser.readline().decode('ascii')
+            self.serialUpdate.emit(value)
+            ser.flush()
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super(MainWindow, self).__init__()
+        loadUi('/Users/bogdanvesa/P2A_GUI/mainwindow.ui', self)
+        self.thread = TestThread(self)
+        self.thread.serialUpdate.connect(self.handleSerialUpdate)
+
+        self.connect_btn.clicked.connect(self.connectSer)
+        self.lcd_EBtn.clicked.connect(self.startThread)
+
+    def startThread(self):
+        self.thread.start()
+
+    def handleSerialUpdate(self, value):
+        print(value)
+        self.lcd_lineEdit.setText(value)
+
+
+def main():
+
+    app = QApplication(sys.argv)
+    form = MainWindow()
+    form.show()
+    sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()
+python
+python-3.x
+pyqt5
+pyserial
+Share
+Follow
+asked Mar 8 '19 at 20:21
+
+Vesa95
+68544 silver badges1616 bronze badges
+Explain yourself better – eyllanesc Mar 8 '19 at 20:31
+@eyllanesc Ok, when I press a button, I want the connection to Arduino be made (open serial), when I press another button close connection (close serial) but I have no idea how to make this – Vesa95 Mar 8 '19 at 20:38 
+Add a comment
+2 Answers
+
+9
+
+Instead of using pySerial + thread it is better to use QSerialPort that is made to live with the Qt event-loop:
+
+from PyQt5 import QtCore, QtWidgets, QtSerialPort
+
+class Widget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(Widget, self).__init__(parent)
+        self.message_le = QtWidgets.QLineEdit()
+        self.send_btn = QtWidgets.QPushButton(
+            text="Send",
+            clicked=self.send
+        )
+        self.output_te = QtWidgets.QTextEdit(readOnly=True)
+        self.button = QtWidgets.QPushButton(
+            text="Connect", 
+            checkable=True,
+            toggled=self.on_toggled
+        )
+        lay = QtWidgets.QVBoxLayout(self)
+        hlay = QtWidgets.QHBoxLayout()
+        hlay.addWidget(self.message_le)
+        hlay.addWidget(self.send_btn)
+        lay.addLayout(hlay)
+        lay.addWidget(self.output_te)
+        lay.addWidget(self.button)
+
+        self.serial = QtSerialPort.QSerialPort(
+            '/dev/tty.usbmodem14201',
+            baudRate=QtSerialPort.QSerialPort.Baud9600,
+            readyRead=self.receive
+        )
+
+    @QtCore.pyqtSlot()
+    def receive(self):
+        while self.serial.canReadLine():
+            text = self.serial.readLine().data().decode()
+            text = text.rstrip('\r\n')
+            self.output_te.append(text)
+
+    @QtCore.pyqtSlot()
+    def send(self):
+        self.serial.write(self.message_le.text().encode())
+
+    @QtCore.pyqtSlot(bool)
+    def on_toggled(self, checked):
+        self.button.setText("Disconnect" if checked else "Connect")
+        if checked:
+            if not self.serial.isOpen():
+                if not self.serial.open(QtCore.QIODevice.ReadWrite):
+                    self.button.setChecked(False)
+        else:
+            self.serial.close()
+
+if __name__ == '__main__':
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    w = Widget()
+    w.show()
+    sys.exit(app.exec_())
